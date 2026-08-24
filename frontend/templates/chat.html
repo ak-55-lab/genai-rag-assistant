@@ -314,7 +314,45 @@ function appendUserBubble(text) {
   thread.appendChild(msg);
 }
 
-function appendAssistantBubble(data) {
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+  
+  function renderMarkdown(text) {
+      let html = escapeHtml(text);
+    
+      html = html.replace(/\*\*([^\*\n]+?)\*\*/g, '<strong>$1</strong>');
+      html = html.replace(/__([^_\n]+?)__/g, '<strong>$1</strong>');
+      html = html.replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g, '$1<em>$2</em>');
+      html = html.replace(/(^|[^_])_([^_\n]+?)_(?!_)/g, '$1<em>$2</em>');
+    
+      const lines = html.split('\n');
+      const out = [];
+      let listType = null;
+      const flushList = () => {
+            if (listType) { out.push('</' + listType + '>'); listType = null; }
+      };
+      for (const line of lines) {
+            const bulletMatch = line.match(/^\s*[-*]\s+(.*)$/);
+            const numberedMatch = line.match(/^\s*\d+\.\s+(.*)$/);
+            if (bulletMatch) {
+                    if (listType !== 'ul') { flushList(); out.push('<ul>'); listType = 'ul'; }
+                    out.push('<li>' + bulletMatch[1] + '</li>');
+            } else if (numberedMatch) {
+                    if (listType !== 'ol') { flushList(); out.push('<ol>'); listType = 'ol'; }
+                    out.push('<li>' + numberedMatch[1] + '</li>');
+            } else {
+                    flushList();
+                    out.push(line);
+            }
+      }
+      flushList();
+      return out.join('\n');
+  }
+  
+  function appendAssistantBubble(data) {
   const thread = document.getElementById('thread');
   const msg = document.createElement('div');
   msg.className = 'msg assistant';
@@ -323,7 +361,7 @@ function appendAssistantBubble(data) {
 
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
-  bubble.textContent = data.text || data.answer || '(no answer)';
+  bubble.innerHTML = renderMarkdown(data.text || data.answer || '(no answer)');
   wrap.appendChild(bubble);
 
   if (data.confidence) {
