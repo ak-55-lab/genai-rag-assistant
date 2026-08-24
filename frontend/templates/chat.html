@@ -309,9 +309,12 @@ function renderMain() {
 }
 
 function scrollToBottom() {
-  const wrap = document.getElementById('thread-wrap');
-  wrap.scrollTop = wrap.scrollHeight;
-    requestAnimationFrame(() => { wrap.scrollTop = wrap.scrollHeight; });
+    const wrap = document.getElementById('thread-wrap');
+    const pin = () => { wrap.scrollTop = wrap.scrollHeight; };
+    pin();
+    requestAnimationFrame(() => { pin(); requestAnimationFrame(pin); });
+    setTimeout(pin, 60);
+    setTimeout(pin, 250);
 }
 
 function appendUserBubble(text) {
