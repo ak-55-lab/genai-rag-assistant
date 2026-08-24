@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ app_name }}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --accent-1: #6366f1;
+    --accent-2: #22d3ee;
+    --accent-3: #a855f7;
+    --bg-deep: #05070d;
+    --bg-deep-2: #0d1326;
+    --card-bg: rgba(255,255,255,0.055);
+    --card-border: rgba(255,255,255,0.12);
+    --text: #eef2ff;
+    --muted: #8b93b0;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: radial-gradient(1200px 800px at 15% 10%, #14193a 0%, transparent 55%),
+                radial-gradient(1000px 700px at 85% 85%, #131736 0%, transparent 50%),
+                linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-deep-2) 100%);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .orb { position: absolute; border-radius: 50%; filter: blur(70px); opacity: .35; pointer-events: none; }
+  .orb-1 { width: 420px; height: 420px; background: radial-gradient(circle, var(--accent-1), transparent 70%); top: -120px; left: -100px; animation: float1 14s ease-in-out infinite; }
+  .orb-2 { width: 380px; height: 380px; background: radial-gradient(circle, var(--accent-2), transparent 70%); bottom: -140px; right: -100px; animation: float2 16s ease-in-out infinite; }
+  .orb-3 { width: 260px; height: 260px; background: radial-gradient(circle, var(--accent-3), transparent 70%); top: 50%; left: 60%; transform: translate(-50%,-50%); animation: float3 18s ease-in-out infinite; }
+  @keyframes float1 { 0%,100% { transform: translate(0,0); } 50% { transform: translate(40px, 30px); } }
+  @keyframes float2 { 0%,100% { transform: translate(0,0); } 50% { transform: translate(-30px, -40px); } }
+  @keyframes float3 { 0%,100% { transform: translate(-50%,-50%) scale(1); } 50% { transform: translate(-50%,-50%) scale(1.15); } }
+
+  .card {
+    position: relative;
+    z-index: 1;
+    width: 380px;
+    max-width: calc(100vw - 40px);
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-radius: 22px;
+    padding: 40px 34px 34px;
+    box-shadow: 0 30px 90px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.06);
+    animation: rise .5s cubic-bezier(.2,.8,.2,1);
+  }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+
+  .logo-wrap { display: flex; justify-content: center; margin-bottom: 22px; }
+  .logo-badge {
+    width: 76px; height: 76px; border-radius: 20px;
+    background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 0 1px rgba(255,255,255,.15) inset, 0 12px 30px rgba(99,102,241,.45), 0 0 40px rgba(34,211,238,.25);
+    position: relative;
+  }
+  .logo-badge::after {
+    content: ""; position: absolute; inset: -6px; border-radius: 26px;
+    background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+    filter: blur(16px); opacity: .55; z-index: -1;
+    animation: pulseGlow 3s ease-in-out infinite;
+  }
+  @keyframes pulseGlow { 0%,100% { opacity: .4; } 50% { opacity: .75; } }
+  .logo-badge svg { width: 42px; height: 42px; }
+
+  h1 {
+    text-align: center; margin: 0 0 6px; font-size: 26px; font-weight: 700; letter-spacing: .3px;
+    background: linear-gradient(90deg, #ffffff, #c7d2fe 60%, var(--accent-2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  p.sub { text-align: center; color: var(--muted); font-size: 13.5px; margin: 0 0 28px; line-height: 1.5; }
+
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; }
+  .input-shell {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.12);
+    border-radius: 12px; padding: 0 14px; transition: border-color .15s, box-shadow .15s, background .15s;
+  }
+  .input-shell:focus-within {
+    border-color: var(--accent-2);
+    box-shadow: 0 0 0 4px rgba(34,211,238,.15);
+    background: rgba(255,255,255,.06);
+  }
+  .input-shell svg { flex-shrink: 0; opacity: .55; }
+  .input-shell input {
+    flex: 1; min-width: 0; background: transparent; border: none; outline: none;
+    color: var(--text); font-size: 14.5px; padding: 12px 0; font-family: inherit;
+  }
+  .input-shell input::placeholder { color: #5b6280; }
+
+  button.enter {
+    width: 100%; margin-top: 8px; padding: 13px 12px; border: none; border-radius: 12px;
+    font-size: 14.5px; font-weight: 700; letter-spacing: .02em; color: #05070d; cursor: pointer;
+    background: linear-gradient(90deg, var(--accent-2), var(--accent-1));
+    box-shadow: 0 10px 26px rgba(99,102,241,.35);
+    transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+  }
+  button.enter:hover { filter: brightness(1.08); transform: translateY(-1px); box-shadow: 0 14px 32px rgba(99,102,241,.45); }
+  button.enter:active { transform: translateY(0); }
+
+  .error {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.35);
+    color: #fca5a5; font-size: 12.5px; padding: 9px 12px; border-radius: 10px; margin-bottom: 16px;
+  }
+
+  .footnote { text-align: center; margin-top: 24px; color: #4c5273; font-size: 11.5px; letter-spacing: .03em; }
+</style>
+</head>
+<body>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+
+  <form class="card" method="post" autocomplete="off">
+    <div class="logo-wrap">
+      <div class="logo-badge">
+        <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="botGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#ffffff"/>
+              <stop offset="100%" stop-color="#e0f2fe"/>
+            </linearGradient>
+          </defs>
+          <line x1="32" y1="6" x2="32" y2="14" stroke="url(#botGrad)" stroke-width="3" stroke-linecap="round"/>
+          <circle cx="32" cy="5" r="3.4" fill="url(#botGrad)"/>
+          <rect x="10" y="14" width="44" height="34" rx="12" fill="url(#botGrad)" fill-opacity=".95"/>
+          <rect x="16" y="21" width="32" height="20" rx="8" fill="#0e1330"/>
+          <circle cx="26" cy="31" r="4.2" fill="#22d3ee">
+            <animate attributeName="opacity" values="1;0.35;1" dur="2.4s" repeatCount="indefinite"/>
+          </circle>
+          <circle cx="38" cy="31" r="4.2" fill="#6366f1">
+            <animate attributeName="opacity" values="1;0.35;1" dur="2.4s" begin="0.4s" repeatCount="indefinite"/>
+          </circle>
+          <path d="M22 46 L18 54" stroke="url(#botGrad)" stroke-width="3.4" stroke-linecap="round"/>
+          <path d="M42 46 L46 54" stroke="url(#botGrad)" stroke-width="3.4" stroke-linecap="round"/>
+          <rect x="1" y="26" width="6" height="12" rx="3" fill="url(#botGrad)"/>
+          <rect x="57" y="26" width="6" height="12" rx="3" fill="url(#botGrad)"/>
+        </svg>
+      </div>
+    </div>
+
+    <h1>{{ app_name }}</h1>
+    <p class="sub">Sign in to chat with the Gen AI Academy knowledge assistant</p>
+
+    {% if error %}
+    <div class="error">
+      <svg width="15" height="15" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="9" stroke="#fca5a5" stroke-width="1.5"/><path d="M10 6v5" stroke="#fca5a5" stroke-width="1.5" stroke-linecap="round"/><circle cx="10" cy="13.5" r="1" fill="#fca5a5"/></svg>
+      {{ error }}
+    </div>
+    {% endif %}
+
+    <div class="field">
+      <label for="username">Your Name</label>
+      <div class="input-shell">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="#8b93b0" stroke-width="1.6"/><path d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" stroke="#8b93b0" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <input type="text" id="username" name="username" placeholder="Enter your name" autofocus required autocomplete="off">
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="password">Password</label>
+      <div class="input-shell">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="5" y="10.5" width="14" height="9.5" rx="2.4" stroke="#8b93b0" stroke-width="1.6"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" stroke="#8b93b0" stroke-width="1.6"/></svg>
+        <input type="password" id="password" name="password" placeholder="Enter your password" required autocomplete="off">
+      </div>
+    </div>
+
+    <button type="submit" class="enter">Enter GenAI</button>
+
+    <div class="footnote">Gen AI Academy &middot; Private Preview</div>
+  </form>
+</body>
+</html>

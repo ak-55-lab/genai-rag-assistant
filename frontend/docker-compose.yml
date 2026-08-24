@@ -1,0 +1,12 @@
+services:
+  genai-chat:
+    build: .
+    ports:
+      - "8081:8080"
+    env_file:
+      - .env
+    environment:
+      - PORT=8080
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

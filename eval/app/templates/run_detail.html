@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Run {{ run_id }} — RAG Eval Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  * { box-sizing:border-box; }
+  body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background:#f4f6f8; margin:0; color:#0f1720; }
+  header { background:#0f1720; color:#fff; padding:18px 32px; display:flex; justify-content:space-between; align-items:center; }
+  header h1 { font-size:16px; margin:0; font-weight:600; }
+  header a { color:#94a3b8; font-size:13px; text-decoration:none; }
+  main { max-width:1180px; margin:0 auto; padding:28px 24px 60px; }
+  .card { background:#fff; border-radius:10px; padding:20px 22px; box-shadow:0 1px 3px rgba(0,0,0,.08); margin-bottom:20px; overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:12.5px; }
+  th, td { text-align:left; padding:7px 9px; border-bottom:1px solid #eef1f4; white-space:nowrap; }
+  td.q { white-space:normal; max-width:320px; }
+  th { color:#64748b; font-weight:600; font-size:11px; text-transform:uppercase; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Run: {{ run_id }}</h1>
+  <a href="{{ url_for('dashboard') }}">&larr; Back to dashboard</a>
+</header>
+<main>
+  <div class="card">
+    <h2>Aggregates</h2>
+    <pre style="white-space:pre-wrap; font-size:12.5px;">{{ data.aggregates | tojson(indent=2) }}</pre>
+  </div>
+  <div class="card">
+    <h2>Per-question scores</h2>
+    <table>
+      <tr>
+        <th>Eval ID</th><th>Module/Topic</th><th>Type</th><th>Difficulty</th>
+        <th>Faithfulness</th><th>Answer Rel.</th><th>Ctx Precision</th><th>Ctx Recall</th>
+      </tr>
+      {% for row in data.per_question %}
+      <tr>
+        <td>{{ row.eval_id }}</td>
+        <td>{{ row.module_topic }}</td>
+        <td>{{ row.question_type }}</td>
+        <td>{{ row.difficulty }}</td>
+        <td>{{ "%.0f"|format((row.faithfulness or 0)*100) }}%</td>
+        <td>{{ "%.0f"|format((row.answer_relevancy or 0)*100) }}%</td>
+        <td>{{ "%.0f"|format((row.context_precision or 0)*100) }}%</td>
+        <td>{{ "%.0f"|format((row.context_recall or 0)*100) }}%</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+</main>
+</body>
+</html>

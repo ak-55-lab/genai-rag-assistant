@@ -1,0 +1,789 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "fileSelector": "/data/gen-ai-academy/**/*.{docx,pdf,pptx,xlsx,csv,txt,md}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1.1,
+      "position": [
+        480,
+        0
+      ],
+      "id": "3c4e4d45-f78c-4fc4-96f9-246a0f0f4772",
+      "name": "Read/Write Files from Disk"
+    },
+    {
+      "parameters": {
+        "options": {
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "source",
+                "value": "={{ $json.source }}"
+              },
+              {
+                "name": "index",
+                "value": "={{ $json.index }}"
+              },
+              {
+                "name": "file_path",
+                "value": "={{ $json.file_path }}"
+              }
+            ]
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        2144,
+        288
+      ],
+      "id": "41e43e70-42ee-4d5a-b4c6-c07c7b9588bf",
+      "name": "Default Data Loader"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        224,
+        416
+      ],
+      "id": "9aab874f-9b1c-4c65-8fdc-acd07162b609",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "tRcGioj0jAk01gDv",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "Ji5ozN6dxyz7Tr2V",
+          "mode": "list",
+          "cachedResultName": "indexed_files",
+          "cachedResultUrl": "/projects/3pGIBu5mN9QyVJHi/datatables/Ji5ozN6dxyz7Tr2V"
+        },
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        256,
+        0
+      ],
+      "id": "89ab4b31-3d3f-48df-8a1c-6b19726c6bc0",
+      "name": "Get Indexed Files Manifest",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const allItems = $input.all();\nconst splitItems = $('Split Text into Chunks').all();\nconst seen = {};\nfor (let i = 0; i < allItems.length; i++) {\n    const src = (splitItems[i] && splitItems[i].json) || {};\n    const fp = src.file_path;\n    const fs = src.file_size;\n    if (!fp || fs === undefined) continue;\n    seen[fp] = fs;\n}\nconst result = Object.keys(seen).map(fp => ({ json: { file_path: fp, file_size: seen[fp] } }));\nreturn result;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2288,
+        -16
+      ],
+      "id": "47cb6bd2-18c3-4ded-bed2-ee01884c7e09",
+      "name": "Dedup Indexed Files"
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "dataTableId": {
+          "__rl": true,
+          "value": "Ji5ozN6dxyz7Tr2V",
+          "mode": "list",
+          "cachedResultName": "indexed_files",
+          "cachedResultUrl": "/projects/3pGIBu5mN9QyVJHi/datatables/Ji5ozN6dxyz7Tr2V"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "file_path",
+              "keyValue": "={{  $json.file_path }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "file_path": "={{  $json.file_path }}",
+            "file_size": "={{ $json.file_size }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "file_path",
+              "displayName": "file_path",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "file_size",
+              "displayName": "file_size",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        2560,
+        -16
+      ],
+      "id": "e0554a3d-02dc-4899-88bb-31140f9b8b54",
+      "name": "Upsert Indexed Files Manifest"
+    },
+    {
+      "parameters": {
+        "jsCode": "const manifestRows = $('Get Indexed Files Manifest').all();\nconst manifest = {};\nfor (const row of manifestRows) {\n  manifest[row.json.file_path] = row.json.file_size;\n}\n\nconst SKIP_FILES = new Set([]);\n\nconst allItems = $input.all();\nconst result = [];\n\nfor (const item of allItems) {\n  const bin = item.binary && item.binary.data;\n  if (!bin) continue;\n  const filePath = bin.directory + '/' + bin.fileName;\n  if (SKIP_FILES.has(filePath)) continue;\n  const fileSize = bin.bytes;\n  const previousSize = manifest[filePath];\n  if (previousSize === undefined || previousSize !== fileSize) {\n    item.json.file_path = filePath;\n    item.json.file_size = fileSize;\n    item.json.is_reindex = previousSize !== undefined;\n    result.push(item);\n  }\n}\n\nresult.sort((a, b) => a.json.file_size - b.json.file_size);\n\nreturn result;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        976,
+        0
+      ],
+      "id": "f0c35fd8-f82f-44e5-88aa-106f00d3fbac",
+      "name": "Filter New or Changed Files"
+    },
+    {
+      "parameters": {
+        "jsCode": "const allItems = $input.all();\nconst chunks = [];\nconst size = 512;\nconst overlap = 100;\n\nconst originalFiles = $('Filter New or Changed Files').all();\nconst fileInfoByBasename = {};\nfor (const orig of originalFiles) {\n  const fp = orig.json.file_path;\n  if (!fp) continue;\n  const base = fp.replace(/\\\\/g, '/').split('/').pop();\n  fileInfoByBasename[base] = { file_path: fp, file_size: orig.json.file_size };\n}\n\nfor (const item of allItems) {\n  const markdown = item.json.document?.md_content || '';\n  const rawSource = item.json.document?.filename || 'unknown';\n  const pathParts = rawSource.replace(/\\\\/g, '/').split('/');\n  const filename = pathParts[pathParts.length - 1];\n  const folder = pathParts.length > 1 ? pathParts[pathParts.length - 2] : 'root';\n  const info = fileInfoByBasename[filename] || {};\n  const filePath = info.file_path || rawSource;\n  const fileSize = info.file_size;\n  const words = markdown.split(/\\s+/).filter(w => w.length > 0);\n  let i = 0;\n  while (i < words.length) {\n    const text = words.slice(i, i + size).join(' ');\n    chunks.push({ json: { text, index: chunks.length, source: filename, file_path: filePath, file_size: fileSize, folder } });\n    i += size - overlap;\n  }\n}\n\nreturn chunks;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        -16
+      ],
+      "id": "2e92e91c-e088-49eb-9db7-cf4ada668fc7",
+      "name": "Split Text into Chunks"
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Search the gen_ai_academy knowledge base to answer questions about Agentic AI onboarding.",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "gen_ai_academy",
+          "mode": "list",
+          "cachedResultName": "gen_ai_academy"
+        },
+        "topK": 15,
+        "useReranker": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        464,
+        400
+      ],
+      "id": "6bfc3b92-32f9-403c-98ab-8458c67a20d5",
+      "name": "Search Qdrant (Retrieval Tool)",
+      "credentials": {
+        "qdrantApi": {
+          "id": "ePOAYqmwLndsEjbZ",
+          "name": "Qdrant account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        464,
+        544
+      ],
+      "id": "6dc9612e-70aa-4903-a837-4fde0cb10f59",
+      "name": "Embeddings OpenAI (Retrieval)",
+      "credentials": {
+        "openAiApi": {
+          "id": "tRcGioj0jAk01gDv",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "gen_ai_academy",
+          "mode": "list",
+          "cachedResultName": "gen_ai_academy"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        1920,
+        -16
+      ],
+      "id": "6511616f-83fc-4d9a-b37d-e12edd2b3ac7",
+      "name": "Index Chunks in Qdrant",
+      "credentials": {
+        "qdrantApi": {
+          "id": "ePOAYqmwLndsEjbZ",
+          "name": "Qdrant account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1920,
+        176
+      ],
+      "id": "1e04b6d2-b20b-4fd0-89a4-02c52f33efac",
+      "name": "Embeddings OpenAI (Indexing)",
+      "credentials": {
+        "openAiApi": {
+          "id": "tRcGioj0jAk01gDv",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "You are a knowledgeable assistant for the Gen AI Academy onboarding program. Answer questions strictly based on the retrieved context from the knowledge base.\n\nFor every response, you MUST include:\n\n1. A clear, well-structured answer to the question.\n\n2. A CITATIONS section at the end listing each source document used, in this format:\n---\nCITATIONS:\n- Source: [source filename] | Chunk: [index] | Relevance: [High / Medium / Low based on how directly the chunk supported your answer]\n\n3. A CONFIDENCE SCORE at the end in this format:\nYou are a knowledgeable assistant for the Gen AI Academy onboarding program. Answer questions strictly based on the retrieved context from the knowledge base.\n\nFor every response, you MUST include:\n\n1. A clear, well-structured answer to the question.\n\n2. A CITATIONS section at the end listing each source document used, in this format:\n---\nCITATIONS:\n- Source: [source filename] | Chunk: [index] | Relevance: [High / Medium / Low based on how directly the chunk supported your answer]\n\n3. A CONFIDENCE LEVEL at the end in this format:\nCONFIDENCE: [High / Medium / Low] \u2014 [one sentence explaining why, e.g. 'Multiple highly relevant chunks directly addressed the question' or 'Partial match only, topic is tangentially covered']\nse these thresholds: High = multiple chunks directly and clearly answer the question. Medium = relevant chunks exist but only partially cover the question or require some inference. Low = context is tangential, thin, or does not contain enough information to answer.\n\nIf the retrieved context does not contain enough information to answer, say so explicitly and set CONFIDENCE to Low.\n\nDo not fabricate information not present in the retrieved chunks."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        224,
+        240
+      ],
+      "id": "f5109e44-840b-4b31-8588-559a0e8cc918",
+      "name": "RAG Chat Agent",
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "1c111451-851f-418c-a4b1-09f98ed8d302",
+      "name": "Run Indexing (Manual Trigger)"
+    },
+    {
+      "parameters": {
+        "public": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        256
+      ],
+      "id": "5695d944-584f-4e0f-9ef7-d8f432032e06",
+      "name": "Chat Trigger (Ask Questions)",
+      "webhookId": "REDACTED-REGENERATE-ON-IMPORT"
+    },
+    {
+      "parameters": {
+        "content": "## \ud83d\udce5 INDEXING PIPELINE\nRun manually to (re)index files from /data/gen-ai-academy into Qdrant. Checks the manifest first and only converts/embeds files that are new or changed.",
+        "height": 224,
+        "width": 256
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        -240
+      ],
+      "id": "cbe640a7-069a-4970-9d4a-831ec40af750",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## \ud83d\udcac CHAT / RETRIEVAL PIPELINE\nAnswers user questions using the indexed knowledge base. Retrieves relevant chunks from Qdrant and generates an answer with the RAG Chat Agent.",
+        "height": 240,
+        "width": 256
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        416
+      ],
+      "id": "7d6c1c49-941a-4694-92c5-312d91271350",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// For files that were already indexed before (is_reindex === true),\n// delete their existing chunks from Qdrant before the new ones get inserted,\n// so a changed file doesn't leave stale + fresh chunks both in the vector store.\nconst allItems = $input.all();\nconst qdrantBaseUrl = 'http://host.docker.internal:6333';\nconst qdrantCollection = 'gen_ai_academy';\n\nfor (const item of allItems) {\n    if (!item.json.is_reindex) continue;\n    const filePath = item.json.file_path;\n    const res = await fetch(`${qdrantBaseUrl}/collections/${qdrantCollection}/points/delete`, {\n          method: 'POST',\n          headers: { 'Content-Type': 'application/json' },\n          body: JSON.stringify({\n                  filter: {\n                            must: [\n                              { key: 'metadata.file_path', match: { value: filePath } }\n                                      ]\n                  }\n          })\n    });\n    if (!res.ok) {\n          const text = await res.text();\n          throw new Error(`Failed to delete stale Qdrant points for ${filePath}: ${res.status} ${text}`);\n    }\n}\n\nreturn allItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1216,
+        0
+      ],
+      "id": "b9ac8e58-fceb-4a17-9c7a-11fe88c62106",
+      "name": "Delete Stale Chunks if Re-indexing"
+    },
+    {
+      "parameters": {
+        "jsCode": "// The disk-read glob pattern can match the same physical file more than\n// once (confirmed: 198 items read for 33 real files = 6x duplicates).\n// Collapse to one item per unique file_path before anything downstream\n// (Filter, Docling, Qdrant) ever sees it.\nconst allItems = $input.all();\nconst seen = new Set();\nconst result = [];\n\nfor (const item of allItems) {\n    const bin = item.binary && item.binary.data;\n    if (!bin) continue;\n    const filePath = bin.directory + '/' + bin.fileName;\n    if (seen.has(filePath)) continue;\n    seen.add(filePath);\n    result.push(item);\n}\n\nreturn result;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        0
+      ],
+      "id": "edc20e54-2ebf-43b8-9f8f-21343088373d",
+      "name": "Dedupe Duplicate File Reads"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:5001/v1/convert/file",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "files",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1
+            }
+          },
+          "timeout": 300000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1424,
+        0
+      ],
+      "id": "770a603a-56af-47be-8c53-38689c1e2477",
+      "name": "Convert File to Text (Docling)",
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "topN": 5
+      },
+      "type": "@n8n/n8n-nodes-langchain.rerankerCohere",
+      "typeVersion": 1,
+      "position": [
+        608,
+        608
+      ],
+      "id": "41888b1c-6c2d-4e6e-b4cb-4a53fcced0fa",
+      "name": "Reranker Cohere",
+      "credentials": {
+        "cohereApi": {
+          "id": "E50Wlrt9flyyXpmJ",
+          "name": "Cohere account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "eval-retrieve",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        816
+      ],
+      "id": "c9c219f6-b292-496a-8e2d-10442b8f787a",
+      "name": "Webhook",
+      "webhookId": "ef3dce38-dc51-4770-9d2c-cc1317ff61ae"
+    },
+    {
+      "parameters": {
+        "mode": "load",
+        "qdrantCollection": {
+          "__rl": true,
+          "value": "gen_ai_academy",
+          "mode": "list",
+          "cachedResultName": "gen_ai_academy"
+        },
+        "prompt": "={{  $json.body.question }}",
+        "topK": 15,
+        "useReranker": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreQdrant",
+      "typeVersion": 1.3,
+      "position": [
+        224,
+        816
+      ],
+      "id": "a7125479-e7b2-4866-9f55-b19932739828",
+      "name": "Qdrant Vector Store",
+      "credentials": {
+        "qdrantApi": {
+          "id": "ePOAYqmwLndsEjbZ",
+          "name": "Qdrant account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        272,
+        1024
+      ],
+      "id": "f2ae7baf-567a-4422-9f34-2367b9aaf160",
+      "name": "Embeddings OpenAI",
+      "credentials": {
+        "openAiApi": {
+          "id": "tRcGioj0jAk01gDv",
+          "name": "OpenAI account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "topN": 5
+      },
+      "type": "@n8n/n8n-nodes-langchain.rerankerCohere",
+      "typeVersion": 1,
+      "position": [
+        480,
+        1072
+      ],
+      "id": "e05be39e-40ba-4eaf-9c83-1131c067c10c",
+      "name": "Reranker Cohere1",
+      "credentials": {
+        "cohereApi": {
+          "id": "E50Wlrt9flyyXpmJ",
+          "name": "Cohere account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        688,
+        816
+      ],
+      "id": "ad6dfc1a-4877-4a13-a273-2ae60b29f646",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Read/Write Files from Disk": {
+      "main": [
+        [
+          {
+            "node": "Dedupe Duplicate File Reads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Data Loader": {
+      "ai_document": [
+        [
+          {
+            "node": "Index Chunks in Qdrant",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "RAG Chat Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Indexed Files Manifest": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup Indexed Files": {
+      "main": [
+        [
+          {
+            "node": "Upsert Indexed Files Manifest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter New or Changed Files": {
+      "main": [
+        [
+          {
+            "node": "Delete Stale Chunks if Re-indexing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Text into Chunks": {
+      "main": [
+        [
+          {
+            "node": "Index Chunks in Qdrant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Qdrant (Retrieval Tool)": {
+      "ai_tool": [
+        [
+          {
+            "node": "RAG Chat Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI (Retrieval)": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Search Qdrant (Retrieval Tool)",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Index Chunks in Qdrant": {
+      "main": [
+        [
+          {
+            "node": "Dedup Indexed Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI (Indexing)": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Index Chunks in Qdrant",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Indexing (Manual Trigger)": {
+      "main": [
+        [
+          {
+            "node": "Get Indexed Files Manifest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat Trigger (Ask Questions)": {
+      "main": [
+        [
+          {
+            "node": "RAG Chat Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Stale Chunks if Re-indexing": {
+      "main": [
+        [
+          {
+            "node": "Convert File to Text (Docling)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedupe Duplicate File Reads": {
+      "main": [
+        [
+          {
+            "node": "Filter New or Changed Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert File to Text (Docling)": {
+      "main": [
+        [
+          {
+            "node": "Split Text into Chunks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reranker Cohere": {
+      "ai_reranker": [
+        [
+          {
+            "node": "Search Qdrant (Retrieval Tool)",
+            "type": "ai_reranker",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Qdrant Vector Store",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Qdrant Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reranker Cohere1": {
+      "ai_reranker": [
+        [
+          {
+            "node": "Qdrant Vector Store",
+            "type": "ai_reranker",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Qdrant Vector Store": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "7b3c7e8d-fcab-4965-96bc-887ae597b7cb",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "fd0efd2acfc13a93be9d93fb8884d94d59000e5c8830d64be5205a53b60202ec"
+  },
+  "nodeGroups": [],
+  "id": "rHAVW87w6DIXxkea",
+  "tags": []
+}

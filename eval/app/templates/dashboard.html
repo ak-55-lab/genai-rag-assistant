@@ -1,0 +1,237 @@
+{% from '_macros.html' import render_breakdown %}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RAG Eval Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; background:#f4f6f8; margin:0; color:#0f1720; }
+  header { background:#0f1720; color:#fff; padding:18px 32px; display:flex; justify-content:space-between; align-items:center; }
+  header h1 { font-size:17px; margin:0; font-weight:600; }
+  header .sub { color:#94a3b8; font-size:12px; margin-top:2px; }
+  header a { color:#94a3b8; font-size:13px; text-decoration:none; }
+  main { max-width:1180px; margin:0 auto; padding:28px 24px 60px; }
+  .row { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:24px; }
+  .card { background:#fff; border-radius:10px; padding:20px 22px; box-shadow:0 1px 3px rgba(0,0,0,.08); flex:1; min-width:220px; }
+  .metric-card .label { font-size:12px; color:#64748b; text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px; }
+  .metric-card .value { font-size:32px; font-weight:700; }
+  .metric-card .value.good { color:#16a34a; }
+  .metric-card .value.warn { color:#d97706; }
+  .metric-card .value.bad { color:#dc2626; }
+  h2 { font-size:15px; margin:0 0 14px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid #eef1f4; }
+  th { color:#64748b; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.03em; }
+  tr:last-child td { border-bottom:none; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; }
+  .pill.good { background:#dcfce7; color:#166534; }
+  .pill.warn { background:#fef3c7; color:#92400e; }
+  .pill.bad { background:#fee2e2; color:#991b1b; }
+  .controls { display:flex; gap:10px; align-items:center; }
+  select, .btn { padding:8px 14px; border-radius:8px; border:1px solid #cbd5e1; font-size:13px; background:#fff; }
+  .btn.primary { background:#0f1720; color:#fff; border:none; cursor:pointer; font-weight:600; }
+  .btn.primary:hover { background:#1e293b; }
+  .btn.primary:disabled { opacity:.5; cursor:not-allowed; }
+  .status-line { font-size:12px; color:#64748b; margin-top:8px; }
+  .empty { color:#94a3b8; font-size:13px; padding:20px 0; }
+  a.run-link { color:#2563eb; text-decoration:none; }
+  a.run-link:hover { text-decoration:underline; }
+  .gap-note { background:#fffbeb; border:1px solid #fde68a; color:#92400e; padding:10px 14px; border-radius:8px; font-size:12.5px; margin-bottom:20px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>RAG Eval Dashboard</h1>
+    <div class="sub">RAGAS scoring — GenAI Academy RAG agent</div>
+  </div>
+  <a href="{{ url_for('logout') }}">Sign out</a>
+</header>
+<main>
+
+  {% if not latest %}
+    <div class="gap-note">No eval runs yet. Click "Run quick eval" below to score a random 15-20 question subset, or run a full 161-question baseline via the CLI (see README).</div>
+  {% endif %}
+
+  <div class="row">
+    <div class="card">
+      <h2>Run a new eval</h2>
+      <div class="controls">
+        <select id="mode-select">
+          <option value="quick">Quick (random 15-20 questions)</option>
+          <option value="full">Full (all 161 questions)</option>
+        </select>
+        <button class="btn primary" id="run-btn" onclick="triggerRun()">Run eval</button>
+      </div>
+      <div class="status-line" id="status-line">
+        {% if run_state.status in ('collecting','scoring') %}{{ run_state.detail }}{% else %}Idle{% endif %}
+      </div>
+    </div>
+  </div>
+
+  {% if latest %}
+  <div class="row">
+    {% for key, label in [('faithfulness','Faithfulness'), ('answer_relevancy','Answer Relevancy'), ('context_precision','Context Precision'), ('context_recall','Context Recall')] %}
+    {% set v = latest.overall.get(key) %}
+    <div class="card metric-card">
+      <div class="label">{{ label }}</div>
+      <div class="value {% if v is none %}{% elif v >= 0.85 %}good{% elif v >= flag_threshold %}warn{% else %}bad{% endif %}">
+        {{ "%.0f"|format(v*100) if v is not none else "—" }}{% if v is not none %}%{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="row">
+    <div class="card" style="flex:2;">
+      <h2>Latest run — {{ latest.run_id }}</h2>
+      <table>
+        <tr><th>Mode</th><td>{{ latest.mode }}</td></tr>
+        <tr><th>Scored at (UTC)</th><td>{{ latest.scored_at }}</td></tr>
+        <tr><th>Questions</th><td>{{ latest.scored_count }} scored / {{ latest.question_count }} attempted ({{ latest.skipped_count }} skipped — collection error)</td></tr>
+        <tr><th>Judge model</th><td>{{ latest.judge_model }}</td></tr>
+        <tr><th>Flagged questions</th><td>{{ latest.flagged_questions|length }} below {{ "%.0f"|format(flag_threshold*100) }}% on at least one metric</td></tr>
+      </table>
+    </div>
+    <div class="card" style="flex:1;">
+      <h2>Trend</h2>
+      <canvas id="trend-canvas" width="360" height="160"></canvas>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="card">
+      <h2>By module / topic</h2>
+      {{ render_breakdown(latest.by_module_topic) }}
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="card" style="flex:1; min-width:280px;">
+      <h2>By question type</h2>
+      {{ render_breakdown(latest.by_question_type) }}
+    </div>
+    <div class="card" style="flex:1; min-width:280px;">
+      <h2>By difficulty</h2>
+      {{ render_breakdown(latest.by_difficulty) }}
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="card">
+      <h2>Flagged questions (need improvement)</h2>
+      {% if latest.flagged_questions %}
+      <table>
+        <tr><th>Eval ID</th><th>Faithfulness</th><th>Answer Relevancy</th><th>Context Precision</th><th>Context Recall</th></tr>
+        {% for q in latest.flagged_questions %}
+        <tr>
+          <td>{{ q.eval_id }}</td>
+          <td>{{ "%.0f"|format(q.get('faithfulness',0)*100) }}%</td>
+          <td>{{ "%.0f"|format(q.get('answer_relevancy',0)*100) }}%</td>
+          <td>{{ "%.0f"|format(q.get('context_precision',0)*100) }}%</td>
+          <td>{{ "%.0f"|format(q.get('context_recall',0)*100) }}%</td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+      <div class="empty">None — every scored question is above the {{ "%.0f"|format(flag_threshold*100) }}% threshold on all metrics.</div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="row">
+    <div class="card">
+      <h2>Run history</h2>
+      {% if runs %}
+      <table>
+        <tr><th>Run ID</th><th>Mode</th><th>Questions</th><th>Faithfulness</th><th>Answer Rel.</th><th>Ctx Precision</th><th>Ctx Recall</th></tr>
+        {% for r in runs %}
+        <tr>
+          <td><a class="run-link" href="{{ url_for('run_detail', run_id=r.run_id) }}">{{ r.run_id }}</a></td>
+          <td>{{ r.mode }}</td>
+          <td>{{ r.scored_count }}</td>
+          <td>{{ "%.0f"|format(r.overall.get('faithfulness',0)*100) }}%</td>
+          <td>{{ "%.0f"|format(r.overall.get('answer_relevancy',0)*100) }}%</td>
+          <td>{{ "%.0f"|format(r.overall.get('context_precision',0)*100) }}%</td>
+          <td>{{ "%.0f"|format(r.overall.get('context_recall',0)*100) }}%</td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+      <div class="empty">No runs yet.</div>
+      {% endif %}
+    </div>
+  </div>
+
+</main>
+
+<script>
+const runsData = {{ runs|tojson }};
+
+function drawTrend() {
+  const canvas = document.getElementById('trend-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height, pad = 20;
+  ctx.clearRect(0,0,w,h);
+  const series = runsData.slice(0, 12).reverse();
+  if (series.length < 2) {
+    ctx.fillStyle = '#94a3b8'; ctx.font = '12px sans-serif';
+    ctx.fillText('Need 2+ runs to show a trend', 10, h/2);
+    return;
+  }
+  const metrics = [
+    {key:'faithfulness', color:'#2563eb'},
+    {key:'answer_relevancy', color:'#16a34a'},
+    {key:'context_precision', color:'#d97706'},
+    {key:'context_recall', color:'#dc2626'},
+  ];
+  const n = series.length;
+  metrics.forEach(m => {
+    ctx.beginPath();
+    series.forEach((r, i) => {
+      const v = (r.overall && r.overall[m.key]) || 0;
+      const x = pad + (i/(n-1)) * (w - 2*pad);
+      const y = h - pad - v * (h - 2*pad);
+      if (i === 0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    });
+    ctx.strokeStyle = m.color; ctx.lineWidth = 2; ctx.stroke();
+  });
+}
+drawTrend();
+
+let polling = null;
+function triggerRun() {
+  const mode = document.getElementById('mode-select').value;
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+  fetch('/api/run', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({mode})})
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) { alert(data.error); btn.disabled = false; return; }
+      poll();
+    });
+}
+function poll() {
+  fetch('/api/status').then(r => r.json()).then(s => {
+    document.getElementById('status-line').textContent = s.detail || s.status;
+    if (s.status === 'collecting' || s.status === 'scoring') {
+      polling = setTimeout(poll, 2000);
+    } else {
+      document.getElementById('run-btn').disabled = false;
+      if (s.status === 'done') { location.reload(); }
+    }
+  });
+}
+// resume polling on load if a run is already in progress
+{% if run_state.status in ('collecting','scoring') %}
+document.getElementById('run-btn').disabled = true;
+poll();
+{% endif %}
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+# Pinned as a known-compatible set. ragas 0.2.x imports a langchain-community
+# submodule (vertexai chat models) that was removed in langchain-community
+# 0.4+, so langchain-community/langchain-openai must stay below 0.4 or
+# `import ragas` fails outright. Verified working combo below -- if you bump
+# ragas, re-verify these together.
+ragas==0.2.15
+langchain==0.3.30
+langchain-community<0.4
+langchain-openai<0.4
+openai>=1.40.0
+pandas>=2.0.0
+openpyxl>=3.1.0
+requests>=2.31.0
+Flask>=3.0.0
+gunicorn>=22.0.0
+python-dotenv>=1.0.0

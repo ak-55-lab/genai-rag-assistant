@@ -1,0 +1,21 @@
+# Secrets / local config
+.env
+*.env
+!*.env.example
+
+# Knowledge base & eval data (proprietary course content — never commit)
+eval/data/*.xlsx
+eval/results/raw/*
+eval/results/runs/*
+!eval/results/raw/.gitkeep
+!eval/results/runs/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+*.swp

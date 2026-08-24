@@ -1,0 +1,18 @@
+{% macro render_breakdown(breakdown) %}
+  {% if breakdown %}
+  <table>
+    <tr><th>Group</th><th>Faithfulness</th><th>Answer Rel.</th><th>Ctx Precision</th><th>Ctx Recall</th></tr>
+    {% for key, scores in breakdown.items() %}
+    <tr>
+      <td>{{ key }}</td>
+      <td>{{ "%.0f"|format(scores.get('faithfulness',0)*100) }}%</td>
+      <td>{{ "%.0f"|format(scores.get('answer_relevancy',0)*100) }}%</td>
+      <td>{{ "%.0f"|format(scores.get('context_precision',0)*100) }}%</td>
+      <td>{{ "%.0f"|format(scores.get('context_recall',0)*100) }}%</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}
+  <div class="empty">No data.</div>
+  {% endif %}
+{% endmacro %}
