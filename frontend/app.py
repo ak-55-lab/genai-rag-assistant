@@ -6,6 +6,7 @@ no OpenAI key and does no scoring -- it just forwards chat messages to your
 n8n chat webhook and renders the reply.
 """
 import os
+import re
 import uuid
 from functools import wraps
 
@@ -72,9 +73,12 @@ def chat():
 def _split_answer_and_metadata(raw_output):
     """The RAG Chat Agent returns one text blob with the answer, a CITATIONS
     block, and a CONFIDENCE line. Split them out for clean display."""
-    marker = "\n---\nCITATIONS:"
-    answer = raw_output.split(marker)[0].strip() if marker in raw_output else raw_output.strip()
-
+    if "CITATIONS:" in raw_output:
+        answer = raw_output.split("CITATIONS:", 1)[0]
+        answer = re.sub(r"-{3,}\s*$", "", answer).strip()
+    else:
+        answer = raw_output.strip()
+        
     citations = None
     confidence = None
     if "CITATIONS:" in raw_output:
